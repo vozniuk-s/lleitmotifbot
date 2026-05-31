@@ -17,6 +17,9 @@ namespace backend.Controllers
         [HttpPost]
         public async Task<IActionResult> Post([FromBody] Update update)
         {
+            if (update == null)
+                return BadRequest();
+
             await _commandExecutor.ExecuteAsync(update);
             return Ok();
         }
