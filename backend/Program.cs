@@ -35,6 +35,8 @@ builder.Services.AddTransient<CommandExecutor>();
 builder.Services.Configure<backend.Models.AdminSettings>(builder.Configuration.GetSection("AdminSettings"));
 builder.Services.AddSingleton<backend.Services.MessageCacheService>();
 
+builder.Services.AddHostedService<BotBackgroundService>();
+
 var app = builder.Build();
 
 // init db
@@ -47,11 +49,11 @@ using (var scope = app.Services.CreateScope())
     textCache.LoadCache();
 }
 
-var botClient = app.Services.GetRequiredService<ITelegramBotClient>();
+/*var botClient = app.Services.GetRequiredService<ITelegramBotClient>();
 string webhookUrl = builder.Configuration["WebhookUrl"]
     ?? throw new ArgumentNullException("Can't find WebhookUrl in config");
 await botClient.SetWebhook(webhookUrl);
-
+*/
 // Pipeline
 app.UseMiddleware<backend.Middlewares.ExceptionHandlingMiddleware>();
 
