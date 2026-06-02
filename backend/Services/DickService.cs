@@ -66,19 +66,23 @@ namespace backend.Services
             }
 
             // Game logic
-            // 15% - minus, 85% - plus
-            bool isNegative = _random.Next(1, 101) <= 15;
+            // 23% - minus, 85% - plus
+            bool isNegative = _random.Next(1, 101) <= 23;
 
-            // basic probability curve
-            double curve = Math.Pow(_random.NextDouble(), 1.5);
             int change;
 
-            if (isNegative)
-                // generate number (from -1 to -8)
-                change = -((int)Math.Round(curve * 7) + 1);
+            if (isNegative && user.Score > 0)
+            {
+                change = WeightedRandom(
+                    new[] { -1, -2, -3, -4, -5, -6, -7, -8 },
+                    new[] { 15, 25, 25, 15, 10, 6, 3, 1 });
+            }
             else
-                // generate number (from +1 to +10)
-                change = (int)Math.Round(curve * 9) + 1;
+            {
+                change = WeightedRandom(
+                    new[] { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10 },
+                    new[] { 2, 5, 15, 25, 25, 15, 8, 3, 1, 1 });
+            }
 
             int oldScore = user.Score;
             user.Score += change;
@@ -100,6 +104,23 @@ namespace backend.Services
             return (true, resultMessage);
         }
 
+        private int WeightedRandom(int[] values, int[] weights)
+        {
+            int totalWeight = weights.Sum();
+            int roll = _random.Next(totalWeight);
+
+            int cumulative = 0;
+
+            for (int i = 0; i < values.Length; i++)
+            {
+                cumulative += weights[i];
+
+                if (roll < cumulative)
+                    return values[i];
+            }
+
+            return values[^1];
+        }
         public string GetTopTenPlayers(long chatId)
         {
             var topUsers = _db.PlayerStats

@@ -28,6 +28,12 @@ namespace backend.Commands
 
             var messageText = update.Message.Text;
             var chatId = update.Message.Chat.Id;
+             
+            if(update.Message.Text == "/dick@pipisabot")
+            {
+                await _botClient.DeleteMessage(chatId, update.Message.Id);
+                return;
+            }
 
             if (!messageText.StartsWith("/"))
                 return;
