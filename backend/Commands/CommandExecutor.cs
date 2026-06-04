@@ -84,18 +84,18 @@ namespace backend.Commands
                                         replyParameters: new ReplyParameters { MessageId = update.Message.Id });
                                 }
                             }
-                        }
-                        else if (!string.IsNullOrEmpty(mediaData.Play))
-                        {
-                            using var videoStream = await _tiktokservice.GetFileStreamAsync(mediaData.Play);
-
-                            if (videoStream != null)
+                            else if (!string.IsNullOrEmpty(mediaData.Play))
                             {
-                                await _botClient.SendVideo(
-                                    chatId: chatId,
-                                    video: InputFile.FromStream(videoStream, "video.mp4"),
-                                    disableNotification: true,
-                                    replyParameters: new ReplyParameters { MessageId = update.Message.Id });
+                                using var videoStream = await _tiktokservice.GetFileStreamAsync(mediaData.Play);
+
+                                if (videoStream != null)
+                                {
+                                    await _botClient.SendVideo(
+                                        chatId: chatId,
+                                        video: InputFile.FromStream(videoStream, "video.mp4"),
+                                        disableNotification: true,
+                                        replyParameters: new ReplyParameters { MessageId = update.Message.Id });
+                                }
                             }
                         }
                     }
@@ -104,6 +104,8 @@ namespace backend.Commands
                         _logger.LogError(ex, "Error while background downloading TikTok");
                     }
                 });
+
+                return;
             }
 
             if (!messageText.StartsWith("/"))
