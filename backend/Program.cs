@@ -18,7 +18,9 @@ var botToken = builder.Configuration["BotToken"];
 builder.Services.AddDbContext<BotDbContext>(optins =>
     optins.UseSqlite("Data Source=bot.db"));
 
-builder.Services.AddControllers();  
+
+builder.Services.AddControllers();
+builder.Services.AddMemoryCache();
 builder.Services.AddSingleton<ITelegramBotClient>(new TelegramBotClient(botToken));
 
 builder.Services.AddHttpClient<TikTokDownloaderService>();
@@ -31,6 +33,7 @@ builder.Services.AddTransient<ITelegramCommand, SetScoreCommand>();
 builder.Services.AddTransient<ITelegramCommand, SetMessageCommand>();
 builder.Services.AddTransient<ITelegramCommand, DeleteRecordCommand>();
 builder.Services.AddTransient<ITelegramCommand, ResetAttemptCommand>();
+builder.Services.AddTransient<ITelegramCommand, RipCommand>();
 builder.Services.AddTransient<CommandExecutor>();
 
 builder.Services.Configure<backend.Models.AdminSettings>(builder.Configuration.GetSection("AdminSettings"));

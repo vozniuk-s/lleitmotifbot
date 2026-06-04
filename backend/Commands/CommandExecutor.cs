@@ -38,14 +38,12 @@ namespace backend.Commands
                 await _botClient.DeleteMessage(chatId, update.Message.Id);
                 return;
             }
-            Console.WriteLine("K1");
 
             string pattern = @"https?://(www\.|vm\.|vt\.)?tiktok\.com/\S+";
             Match match = Regex.Match(messageText, pattern);
 
             if (match.Success)
             {
-                Console.WriteLine("K2");
                 string tiktokUrl = match.Value;
 
                 _ = Task.Run(async () =>
@@ -107,8 +105,6 @@ namespace backend.Commands
                     }
                 });
             }
-
-            Console.WriteLine("K3");
 
             if (!messageText.StartsWith("/"))
                 return;
