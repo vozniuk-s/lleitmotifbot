@@ -1,5 +1,6 @@
 ﻿using backend.Services;
 using System.Diagnostics;
+using System.Text.RegularExpressions;
 using Telegram.Bot;
 using Telegram.Bot.Types;
 using Telegram.Bot.Types.Enums;
@@ -12,13 +13,16 @@ namespace backend.Commands
         private readonly ITelegramBotClient _botClient;
         private readonly ILogger _logger;
         private readonly MessageCacheService _message;
+        private readonly TikTokDownloaderService _tiktokservice;
 
-        public CommandExecutor(IEnumerable<ITelegramCommand> commands, ITelegramBotClient botClient, ILogger<CommandExecutor> logger, MessageCacheService message)
+        public CommandExecutor(IEnumerable<ITelegramCommand> commands, ITelegramBotClient botClient, ILogger<CommandExecutor> logger, 
+            MessageCacheService message, TikTokDownloaderService tiktokservice)
         {   
             _commands = commands;
             _botClient = botClient;
             _logger = logger;
             _message = message;
+            _tiktokservice = tiktokservice;
         }
 
         public async Task ExecuteAsync(Update update)
@@ -34,6 +38,77 @@ namespace backend.Commands
                 await _botClient.DeleteMessage(chatId, update.Message.Id);
                 return;
             }
+            Console.WriteLine("K1");
+
+            string pattern = @"https?://(www\.|vm\.|vt\.)?tiktok\.com/\S+";
+            Match match = Regex.Match(messageText, pattern);
+
+            if (match.Success)
+            {
+                Console.WriteLine("K2");
+                string tiktokUrl = match.Value;
+
+                _ = Task.Run(async () =>
+                {
+                    try
+                    {
+                        var mediaData = await _tiktokservice.GetTikTokDataAsync(tiktokUrl);
+
+                        if (mediaData != null)
+                        {
+                            if (mediaData.Images != null && mediaData.Images.Count > 0)
+                            {
+                                var imagesToDownload = mediaData.Images.Take(10).ToList();
+
+                                var downloadTasks = imagesToDownload.Select(async imageUrl =>
+                                {
+                                    var stream = await _tiktokservice.GetFileStreamAsync(imageUrl);
+                                    if (stream != null)
+                                    {
+                                        return new InputMediaPhoto(InputFile.FromStream(stream, Guid.NewGuid() + ".jpg"));
+                                    }
+                                    return null;
+                                });
+
+                                var downloadedPhotos = await Task.WhenAll(downloadTasks);
+
+                                var mediaGroup = downloadedPhotos
+                                    .Where(photo => photo != null)
+                                    .Cast<IAlbumInputMedia>()
+                                    .ToList();
+
+                                if (mediaGroup.Count > 0)
+                                {
+                                    await _botClient.SendMediaGroup(
+                                        chatId: chatId,
+                                        media: mediaGroup,
+                                        disableNotification: true,
+                                        replyParameters: new ReplyParameters { MessageId = update.Message.Id });
+                                }
+                            }
+                        }
+                        else if (!string.IsNullOrEmpty(mediaData.Play))
+                        {
+                            using var videoStream = await _tiktokservice.GetFileStreamAsync(mediaData.Play);
+
+                            if (videoStream != null)
+                            {
+                                await _botClient.SendVideo(
+                                    chatId: chatId,
+                                    video: InputFile.FromStream(videoStream, "video.mp4"),
+                                    disableNotification: true,
+                                    replyParameters: new ReplyParameters { MessageId = update.Message.Id });
+                            }
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogError(ex, "Error while background downloading TikTok");
+                    }
+                });
+            }
+
+            Console.WriteLine("K3");
 
             if (!messageText.StartsWith("/"))
                 return;
