@@ -31,6 +31,7 @@ namespace backend.Commands
             await botClient.SendMessage(
                 chatId: chatId,
                 text: result.Message,
+                disableNotification: true,
                 parseMode: ParseMode.Html);
         }
     }

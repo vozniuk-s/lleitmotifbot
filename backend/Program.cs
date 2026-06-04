@@ -21,6 +21,7 @@ builder.Services.AddDbContext<BotDbContext>(optins =>
 builder.Services.AddControllers();  
 builder.Services.AddSingleton<ITelegramBotClient>(new TelegramBotClient(botToken));
 
+builder.Services.AddHttpClient<TikTokDownloaderService>();
 builder.Services.AddTransient<DickService>();
 builder.Services.AddTransient<ITelegramCommand, StartCommand>();
 builder.Services.AddTransient<ITelegramCommand, DickCommand>();
