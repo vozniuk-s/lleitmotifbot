@@ -74,14 +74,14 @@ namespace backend.Services
             if (isNegative && user.Score > 0)
             {
                 change = WeightedRandom(
-                    new[] { -1, -2, -3, -4, -5, -6, -7, -8 },
-                    new[] { 15, 25, 25, 15, 10, 6, 3, 1 });
+                     new[] { -1, -2, -3, -4, -5, -6, -7, -8, -9, -10 },
+                     new[] { 4, 6, 10, 14, 16, 16, 12, 10, 7, 5 });
             }
             else
             {
                 change = WeightedRandom(
-                    new[] { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10 },
-                    new[] { 2, 5, 15, 25, 25, 15, 8, 3, 1, 1 });
+                    new[] { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12 },
+                    new[] { 3, 4, 12, 15, 15, 14, 12, 10, 7, 4, 2, 2 });
             }
 
             int oldScore = user.Score;
