@@ -3,7 +3,7 @@
 Telegram-бот для внутрішньої спільноти з інтерактивною щоденною грою, системою лідербордів та вбудованою адмін-панеллю.
 
 ## 🛠 Технологічний стек
-* **Мова:** C#
+* **Мова:** C# 12
 * **Фреймворк:** .NET 8 (Worker Service / Long Polling)
 * **База даних:** SQLite (Entity Framework Core)
 * **Бібліотеки:** `Telegram.Bot` (v22+), `NLog`
@@ -51,6 +51,10 @@ sudo systemctl daemon-reload
 sudo systemctl enable lleitmotifbot.service
 sudo systemctl start lleitmotifbot.service
 ```
+
+## 🎮 Особливості ігрової механіки
+
+**Збалансований рандом:** Використовується система зважених ймовірностей (Weighted Random) із діапазоном результатів (від -10 до +12 см).
 
 ###  Основні команди
 /start — ініціалізація та привітання.

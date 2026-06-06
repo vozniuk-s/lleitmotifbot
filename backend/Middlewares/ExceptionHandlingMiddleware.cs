@@ -1,21 +1,12 @@
 ﻿namespace backend.Middlewares
 {
-    public class ExceptionHandlingMiddleware
+    public class ExceptionHandlingMiddleware(RequestDelegate next, ILogger<ExceptionHandlingMiddleware> logger)
     {
-        private readonly RequestDelegate _next;
-        private readonly ILogger<ExceptionHandlingMiddleware> _logger;
-
-        public ExceptionHandlingMiddleware(RequestDelegate next, ILogger<ExceptionHandlingMiddleware> logger)
-        {
-            _next = next;
-            _logger = logger;
-        }
-
         public async Task Invoke(HttpContext context)
         {
             try
             {
-                await _next(context);
+                await next(context);
             }
             catch (Exception ex)
             {
@@ -23,7 +14,8 @@
                 context.Response.StatusCode = StatusCodes.Status200OK;
             }
         }
-        private string GetFullMethodName(Exception ex)
+
+        private static string GetFullMethodName(Exception ex)
         {
             if (ex.TargetSite == null)
                 return "<unknown>";
@@ -37,18 +29,17 @@
 
             return $"{className}.{methodName}({paramList})";
         }
-
         private void LogException(Exception ex, string level, LogLevel logLevel = LogLevel.Warning)
         {
             var fullMethodName = GetFullMethodName(ex);
             var details = ex.Message;
 
             if (logLevel == LogLevel.Error)
-                _logger.LogError(ex, "[{Level}] in [{Method}]. Details: {Details}", level, fullMethodName, details);
+                logger.LogError(ex, "[{Level}] in [{Method}]. Details: {Details}", level, fullMethodName, details);
             else
-                _logger.LogWarning(ex, "[{Level}] in [{Method}]. Details: {Details}", level, fullMethodName, details);
+                logger.LogWarning(ex, "[{Level}] in [{Method}]. Details: {Details}", level, fullMethodName, details);
 
-            _logger.LogDebug(ex, "StackTrace for {Method}: {StackTrace}", fullMethodName, ex.StackTrace);
+            logger.LogDebug(ex, "StackTrace for {Method}: {StackTrace}", fullMethodName, ex.StackTrace);
         }
     }
 }

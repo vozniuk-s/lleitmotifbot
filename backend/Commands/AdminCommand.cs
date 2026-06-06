@@ -7,33 +7,28 @@ using Microsoft.Extensions.Options;
 
 namespace backend.Commands
 {
-    public class AdminCommand : ITelegramCommand
+    public class AdminCommand(IOptions<AdminSettings> adminSettings, DickService dickService, MessageCacheService messageCache) : ITelegramCommand
     {
-        public string Name => "/admin";
-        private readonly AdminSettings _adminSettings;
-        private readonly DickService _dickService;
-        private readonly MessageCacheService _message;
+        private readonly AdminSettings _adminSettings = adminSettings.Value;
 
-        public AdminCommand(IOptions<AdminSettings> adminSettings, DickService dickService, MessageCacheService message)
-        {
-            _adminSettings = adminSettings.Value;
-            _dickService = dickService;
-            _message = message;
-        }
+        public string Name => "/admin";
 
         public async Task ExecuteAsync(ITelegramBotClient botClient, Update update)
         {
+            if (update.Message?.From == null)
+                return;
+
             var userId = update.Message.From.Id;
             long chatId = update.Message.Chat.Id;
-
+            
             if (userId != _adminSettings.MasterAdminId)
                 return;
 
-            var text = await _dickService.GetAdminPanelAsync(userId, botClient);
+            var text = await dickService.GetAdminPanelAsync(userId, botClient);
 
             if (update.Message.Chat.Type != ChatType.Private)
             {
-                await botClient.SendMessage(chatId, _message.GetMessage("OpenAdminPanel"));
+                await botClient.SendMessage(chatId, messageCache.GetMessage("OpenAdminPanel"));
 
                 await botClient.SendMessage(userId, text, parseMode: ParseMode.Html);
             }

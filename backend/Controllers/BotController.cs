@@ -6,21 +6,15 @@ namespace backend.Controllers
 {
     [Route("api/[controller]")]
     [ApiController]
-    public class BotController : ControllerBase
+    public class BotController(CommandExecutor commandExecutor) : ControllerBase
     {
-        private readonly CommandExecutor _commandExecutor;
-        public BotController(CommandExecutor commandExecutor)
-        {
-            _commandExecutor = commandExecutor;
-        }
-
         [HttpPost]
         public async Task<IActionResult> Post([FromBody] Update update)
         {
             if (update == null)
                 return BadRequest();
 
-            await _commandExecutor.ExecuteAsync(update);
+            await commandExecutor.ExecuteAsync(update);
             return Ok();
         }
     }

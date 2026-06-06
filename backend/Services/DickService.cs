@@ -4,22 +4,26 @@ using Microsoft.Extensions.Options;
 using System.Net;
 using System.Text;
 using Telegram.Bot;
+using System.Collections.Concurrent;
+using Microsoft.EntityFrameworkCore;
 
 namespace backend.Services
 {
-    public class DickService
+    public class DickService(BotDbContext db, MessageCacheService messageCache, IOptions<AdminSettings> adminSettings)
     {
-        private readonly AdminSettings _adminSettings;
-        private readonly MessageCacheService _message;
-        private readonly BotDbContext _db;
-        private readonly Random _random = new Random();
-        public DickService(BotDbContext db, MessageCacheService message, IOptions<AdminSettings> adminSettings) 
-        { 
-            _db = db;
-            _message = message;
-            _adminSettings = adminSettings.Value;
-        }
-        private TimeZoneInfo GetKyivTimeZone()
+        private readonly AdminSettings _adminSettings = adminSettings.Value;
+
+        private readonly Random _random = new();
+        private static readonly ConcurrentDictionary<long, (int LastRoll, int Streak)> _chatStreaks = new();
+        private const int MaximumRepeatNumber = 2;
+
+        private static readonly int[] _negativeValues = [-1, -2, -3, -4, -5, -6, -7, -8, -9, -10];
+        private static readonly int[] _negativeWeights = [4, 6, 10, 14, 16, 16, 12, 10, 7, 5];
+
+        private static readonly int[] _positiveValues = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
+        private static readonly int[] _positiveWeights = [3, 4, 12, 15, 15, 14, 12, 10, 7, 4, 2, 2];
+
+        private static TimeZoneInfo GetKyivTimeZone()
         {
             try
             {
@@ -31,9 +35,9 @@ namespace backend.Services
             }
         }
 
-        public (bool IsSuccess, string Message) PlayDailyGame(long chatId, long userId, string name)
+        public async Task<(bool IsSuccess, string Message)> PlayDailyGameAsync(long chatId, long userId, string name)
         {
-            var user = _db.PlayerStats.FirstOrDefault(u => u.TelegramId == userId && u.ChatId == chatId);
+            var user = db.PlayerStats.FirstOrDefault(u => u.TelegramId == userId && u.ChatId == chatId);
 
             if (user == null)
             {
@@ -41,18 +45,17 @@ namespace backend.Services
                 {
                     TelegramId = userId,
                     ChatId = chatId,
-                    Name = string.IsNullOrEmpty(name) ? _message.GetMessage("DefaultPlayer") : name,
+                    Name = string.IsNullOrEmpty(name) ? messageCache.GetMessage("DefaultPlayer") : name,
                     Score = 0,
                     LastPlayedUtc = DateTime.MinValue
                 };
-                _db.PlayerStats.Add(user);
+                db.PlayerStats.Add(user);
             }
             else
-                user.Name = string.IsNullOrEmpty(name) ? _message.GetMessage("DefaultPlayer") : name;
+                user.Name = string.IsNullOrEmpty(name) ? messageCache.GetMessage("DefaultPlayer") : name;
 
             var kyivZone = GetKyivTimeZone();
 
-            // Check Time
             DateTime utcNow = DateTime.UtcNow;
             DateTime kyivNow = TimeZoneInfo.ConvertTimeFromUtc(utcNow, kyivZone);
             DateTime kyivToday = kyivNow.Date;
@@ -62,27 +65,42 @@ namespace backend.Services
             {
                 DateTime nextMidnightKyiv = kyivToday.AddDays(1);
                 TimeSpan timeUntilNextDay = nextMidnightKyiv - kyivNow;
-                return (false, _message.GetMessage("AlreadyPlayed"));
+                return (false, messageCache.GetMessage("AlreadyPlayed"));
             }
 
-            // Game logic
-            // 23% - minus, 85% - plus
+            // Ігровий алгоритм
             bool isNegative = _random.Next(1, 101) <= 23;
 
             int change;
 
             if (isNegative && user.Score > 0)
-            {
-                change = WeightedRandom(
-                     new[] { -1, -2, -3, -4, -5, -6, -7, -8, -9, -10 },
-                     new[] { 4, 6, 10, 14, 16, 16, 12, 10, 7, 5 });
-            }
+                change = WeightedRandomAsync(_negativeValues, _negativeWeights);
+            else
+                change = WeightedRandomAsync(_positiveValues, _positiveWeights);
+
+            var currentStreak = _chatStreaks.GetValueOrDefault(chatId, (LastRoll: 0, Streak: 0));
+
+            if (change == currentStreak.LastRoll)
+                currentStreak.Streak++;
             else
             {
-                change = WeightedRandom(
-                    new[] { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12 },
-                    new[] { 3, 4, 12, 15, 15, 14, 12, 10, 7, 4, 2, 2 });
+                currentStreak.LastRoll = change;
+                currentStreak.Streak = 1;
             }
+
+            // Якщо гравцю тричі випадає одне й те саме число, то воно трохи змінюється.
+            // 1 та -1 перетворються у 2 та -2 відповідно, щоб не було 0
+            if (currentStreak.Streak > MaximumRepeatNumber)
+            {
+                if (change == 1) change = 2;
+                else if (change == -1) change = -2;
+                else --change;
+
+                currentStreak.LastRoll = change;
+                currentStreak.Streak = 1;
+            }
+
+            _chatStreaks[chatId] = currentStreak;
 
             int oldScore = user.Score;
             user.Score += change;
@@ -90,55 +108,37 @@ namespace backend.Services
             if (user.Score < 0)
                 user.Score = 0;
 
-            // Result
             user.LastPlayedUtc = utcNow;
 
-            _db.SaveChanges();
+            await db.SaveChangesAsync();
 
             int actualChange = user.Score - oldScore;
             string parseName = WebUtility.HtmlEncode(user.Name);
             string resultMessage = actualChange > 0
-                ? string.Format(_message.GetMessage("PlusToScore").Replace("\\n", "\n"), actualChange, user.Score, user.TelegramId, parseName)
-                : string.Format(_message.GetMessage("MinusToScore").Replace("\\n", "\n"), (-1) * actualChange, user.Score, user.TelegramId, parseName);
+                ? string.Format(messageCache.GetMessage("PlusToScore").Replace("\\n", "\n"), actualChange, user.Score, user.TelegramId, parseName)
+                : string.Format(messageCache.GetMessage("MinusToScore").Replace("\\n", "\n"), (-1) * actualChange, user.Score, user.TelegramId, parseName);
 
             return (true, resultMessage);
         }
 
-        private int WeightedRandom(int[] values, int[] weights)
+        public async Task<string> GetTopTenPlayersAsync(long chatId)
         {
-            int totalWeight = weights.Sum();
-            int roll = _random.Next(totalWeight);
-
-            int cumulative = 0;
-
-            for (int i = 0; i < values.Length; i++)
-            {
-                cumulative += weights[i];
-
-                if (roll < cumulative)
-                    return values[i];
-            }
-
-            return values[^1];
-        }
-        public string GetTopTenPlayers(long chatId)
-        {
-            var topUsers = _db.PlayerStats
+            var topUsers = await db.PlayerStats
                 .Where(u => u.ChatId == chatId)
                 .OrderByDescending(u => u.Score)
                 .Take(10)
-                .ToList();
+                .ToListAsync();
 
-            if (!topUsers.Any())
-                return _message.GetMessage("EmptyDatabase");
+            if (topUsers.Count == 0)
+                return messageCache.GetMessage("EmptyDatabase");
 
-            var sb = new StringBuilder($"<b>{_message.GetMessage("TopTenPlayers")}</b>\n\n");
+            var sb = new StringBuilder($"<b>{messageCache.GetMessage("TopTenPlayers")}</b>\n\n");
 
             for (int i = 0; i < topUsers.Count; i++)
             {
                 if (i == 3)
                     sb.AppendLine();
-                
+
                 string medal = i switch
                 {
                     0 => "🥇",
@@ -153,14 +153,13 @@ namespace backend.Services
 
             return sb.ToString();
         }
-
         public async Task<string> GetAdminPanelAsync(long requestUserId, ITelegramBotClient botClient)
         {
             if (requestUserId != _adminSettings.MasterAdminId)
-                return _message.GetMessage("NoAccess");
+                return messageCache.GetMessage("NoAccess");
 
-            var users = _db.PlayerStats.ToList();
-            var sb = new StringBuilder($"<b>{_message.GetMessage("AdminPanel")}</b>\n\n");
+            var users = await db.PlayerStats.ToListAsync();
+            var sb = new StringBuilder($"<b>{messageCache.GetMessage("AdminPanel")}</b>\n\n");
 
             var groupedUsers = users.GroupBy(u => u.ChatId);
 
@@ -189,54 +188,69 @@ namespace backend.Services
                 sb.AppendLine();
             }
 
-            sb.AppendLine(_message.GetMessage("AdminPanelChangeInstructions"));
+            sb.AppendLine(messageCache.GetMessage("AdminPanelChangeInstructions"));
             return sb.ToString();
         }
-
-        public string ForceSetScore(long requestUserId, int recordId, int newScore)
+        public async Task<string> ForceSetScoreAsync(long requestUserId, int recordId, int newScore)
         {
             if (requestUserId != _adminSettings.MasterAdminId)
-                return _message.GetMessage("NoAccess");
+                return messageCache.GetMessage("NoAccess");
 
-            var user = _db.PlayerStats.FirstOrDefault(u => u.Id == recordId);
+            var user = await db.PlayerStats.FirstOrDefaultAsync(u => u.Id == recordId);
             if (user == null)
-                return _message.GetMessage("DidntFind");
+                return messageCache.GetMessage("DidntFind");
 
             user.Score = newScore;
-            _db.SaveChanges();
+            await db.SaveChangesAsync();
 
-            return string.Format(_message.GetMessage("SuccessNumberChange"), user.Name, newScore);
+            return string.Format(messageCache.GetMessage("SuccessNumberChange"), user.Name, newScore);
         }
-
-        public string DeleteRecord(long requestUserId, int recordId)
+        public async Task<string> DeleteRecordAsync(long requestUserId, int recordId)
         {
             if (requestUserId != _adminSettings.MasterAdminId)
-                return _message.GetMessage("NoAccess");
+                return messageCache.GetMessage("NoAccess");
 
-            var user = _db.PlayerStats.FirstOrDefault(u => u.Id == recordId);
+            var user = await db.PlayerStats.FirstOrDefaultAsync(u => u.Id == recordId);
             if (user == null)
-                return _message.GetMessage("DidntFind");
+                return messageCache.GetMessage("DidntFind");
 
             string playerName = user.Name;
-            _db.PlayerStats.Remove(user);
-            _db.SaveChanges();
+            db.PlayerStats.Remove(user);
+            await db.SaveChangesAsync();
 
-            return string.Format(_message.GetMessage("DeleteSuccess"), playerName);
+            return string.Format(messageCache.GetMessage("DeleteSuccess"), playerName);
         }
-
-        public string ResetPlayerTime(long requestUserId, int recordId)
+        public async Task<string> ResetPlayerTimeAsync(long requestUserId, int recordId)
         {
             if (requestUserId != _adminSettings.MasterAdminId)
-                return _message.GetMessage("NoAccess");
+                return messageCache.GetMessage("NoAccess");
 
-            var user = _db.PlayerStats.FirstOrDefault(u => u.Id == recordId);
+            var user = await db.PlayerStats.FirstOrDefaultAsync(u => u.Id == recordId);
             if (user == null)
-                return _message.GetMessage("DidntFind");
+                return messageCache.GetMessage("DidntFind");
 
             user.LastPlayedUtc = DateTime.MinValue;
-            _db.SaveChanges();
+            await db.SaveChangesAsync();
 
-            return string.Format(_message.GetMessage("ResetSuccess"), user.Name);
+            return string.Format(messageCache.GetMessage("ResetSuccess"), user.Name);
+        }
+
+        private int WeightedRandomAsync(int[] values, int[] weights)
+        {
+            int totalWeight = weights.Sum();
+            int roll = _random.Next(totalWeight);
+
+            int cumulative = 0;
+
+            for (int i = 0; i < values.Length; i++)
+            {
+                cumulative += weights[i];
+
+                if (roll < cumulative)
+                    return values[i];
+            }
+
+            return values[^1];
         }
     }
 }

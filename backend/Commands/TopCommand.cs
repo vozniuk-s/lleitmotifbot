@@ -5,14 +5,8 @@ using backend.Services;
 
 namespace backend.Commands
 {
-    public class TopCommand : ITelegramCommand
+    public class TopCommand(DickService dickService) : ITelegramCommand
     {
-        private readonly DickService _dickService;
-
-        public TopCommand(DickService dickService)
-        {
-            _dickService = dickService;
-        }
         public string Name => "/top";
 
         public async Task ExecuteAsync(ITelegramBotClient botClient, Update update)
@@ -22,7 +16,7 @@ namespace backend.Commands
 
             var chatId = update.Message.Chat.Id;
 
-            var topMessage = _dickService.GetTopTenPlayers(chatId);
+            var topMessage = await dickService.GetTopTenPlayersAsync(chatId);
 
             await botClient.SendMessage(
                 chatId: chatId,

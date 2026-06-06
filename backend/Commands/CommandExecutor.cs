@@ -7,24 +7,9 @@ using Telegram.Bot.Types.Enums;
 
 namespace backend.Commands
 {
-    public class CommandExecutor
+    public class CommandExecutor(IEnumerable<ITelegramCommand> commands, ITelegramBotClient botClient, ILogger<CommandExecutor> logger,
+            MessageCacheService messageCache, TikTokDownloaderService tiktokservice)
     {
-        private readonly IEnumerable<ITelegramCommand> _commands;
-        private readonly ITelegramBotClient _botClient;
-        private readonly ILogger _logger;
-        private readonly MessageCacheService _message;
-        private readonly TikTokDownloaderService _tiktokservice;
-
-        public CommandExecutor(IEnumerable<ITelegramCommand> commands, ITelegramBotClient botClient, ILogger<CommandExecutor> logger, 
-            MessageCacheService message, TikTokDownloaderService tiktokservice)
-        {   
-            _commands = commands;
-            _botClient = botClient;
-            _logger = logger;
-            _message = message;
-            _tiktokservice = tiktokservice;
-        }
-
         public async Task ExecuteAsync(Update update)
         {
             if (update.Type != UpdateType.Message || update.Message?.Text == null)
@@ -35,7 +20,7 @@ namespace backend.Commands
              
             if(update.Message.Text == "/dick@pipisabot")
             {
-                await _botClient.DeleteMessage(chatId, update.Message.Id);
+                await botClient.DeleteMessage(chatId, update.Message.Id);
                 return;
             }
 
@@ -50,7 +35,7 @@ namespace backend.Commands
                 {
                     try
                     {
-                        var mediaData = await _tiktokservice.GetTikTokDataAsync(tiktokUrl);
+                        var mediaData = await tiktokservice.GetTikTokDataAsync(tiktokUrl);
 
                         if (mediaData != null)
                         {
@@ -60,7 +45,7 @@ namespace backend.Commands
 
                                 var downloadTasks = imagesToDownload.Select(async imageUrl =>
                                 {
-                                    var stream = await _tiktokservice.GetFileStreamAsync(imageUrl);
+                                    var stream = await tiktokservice.GetFileStreamAsync(imageUrl);
                                     if (stream != null)
                                     {
                                         return new InputMediaPhoto(InputFile.FromStream(stream, Guid.NewGuid() + ".jpg"));
@@ -77,7 +62,7 @@ namespace backend.Commands
 
                                 if (mediaGroup.Count > 0)
                                 {
-                                    await _botClient.SendMediaGroup(
+                                    await botClient.SendMediaGroup(
                                         chatId: chatId,
                                         media: mediaGroup,
                                         disableNotification: true,
@@ -86,11 +71,11 @@ namespace backend.Commands
                             }
                             else if (!string.IsNullOrEmpty(mediaData.Play))
                             {
-                                using var videoStream = await _tiktokservice.GetFileStreamAsync(mediaData.Play);
+                                using var videoStream = await tiktokservice.GetFileStreamAsync(mediaData.Play);
 
                                 if (videoStream != null)
                                 {
-                                    await _botClient.SendVideo(
+                                    await botClient.SendVideo(
                                         chatId: chatId,
                                         video: InputFile.FromStream(videoStream, "video.mp4"),
                                         disableNotification: true,
@@ -101,24 +86,24 @@ namespace backend.Commands
                     }
                     catch (Exception ex)
                     {
-                        _logger.LogError(ex, "Error while background downloading TikTok");
+                        logger.LogError(ex, "Error while background downloading TikTok");
                     }
                 });
 
                 return;
             }
 
-            if (!messageText.StartsWith("/"))
+            if (!messageText.StartsWith('/'))
                 return;
 
-            _logger.LogInformation("Chat: {ChatId} | User: {UserId} ({Username}) | Message: {MessageText}",
+            logger.LogInformation("Chat: {ChatId} | User: {UserId} ({Username}) | Message: {MessageText}",
                chatId,
                update.Message.From?.Id,
                update.Message.From?.Username ?? "NoUsername",
                messageText);
 
             var commandString = messageText.Split(' ')[0].Split('@')[0];
-            var command = _commands.FirstOrDefault(c =>
+            var command = commands.FirstOrDefault(c =>
                 string.Equals(c.Name, commandString, StringComparison.OrdinalIgnoreCase));
 
             if (command != null)
@@ -126,20 +111,20 @@ namespace backend.Commands
                 var stopwatch = Stopwatch.StartNew();
                 try
                 {
-                    await command.ExecuteAsync(_botClient, update);
+                    await command.ExecuteAsync(botClient, update);
                     stopwatch.Stop();
-                    _logger.LogInformation("Success command: {CommandName} | Time: {ElapsedMs} ms", command.Name, stopwatch.ElapsedMilliseconds);
+                    logger.LogInformation("Success command: {CommandName} | Time: {ElapsedMs} ms", command.Name, stopwatch.ElapsedMilliseconds);
                 }
                 catch (Exception ex)
                 {
                     stopwatch.Stop();
-                    _logger.LogError(ex, "Error executing command {Command} in chat {ChatId} after {ElapsedMs} ms", messageText, chatId, stopwatch.ElapsedMilliseconds);
+                    logger.LogError(ex, "Error executing command {Command} in chat {ChatId} after {ElapsedMs} ms", messageText, chatId, stopwatch.ElapsedMilliseconds);
                 }
             }
             else
             {
-                _logger.LogInformation("Command not recognized: {MessageText} in chat {ChatId}", messageText, chatId);
-                await _botClient.SendMessage(chatId, _message.GetMessage("UnknownCommand"));
+                logger.LogInformation("Command not recognized: {MessageText} in chat {ChatId}", messageText, chatId);
+                await botClient.SendMessage(chatId, messageCache.GetMessage("UnknownCommand"));
             }
         }
     }

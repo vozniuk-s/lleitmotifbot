@@ -4,23 +4,20 @@ using Telegram.Bot.Types;
 
 namespace backend.Commands
 {
-    public class StartCommand : ITelegramCommand
+    public class StartCommand(MessageCacheService messageCache) : ITelegramCommand
     {
-        private readonly MessageCacheService _message;
         public string Name => "/start";
 
-        public StartCommand(MessageCacheService message)
-        {
-            _message = message;
-        }
         public async Task ExecuteAsync(ITelegramBotClient botClient, Update update)
         {
+            if (update.Message?.Chat == null)
+                return;
+
             var chatId = update.Message.Chat.Id;
 
             await botClient.SendMessage(
                 chatId: chatId,
-                text: _message.GetMessage("StartMessage")
-                );
+                text: messageCache.GetMessage("StartMessage"));
         }
     }
 }

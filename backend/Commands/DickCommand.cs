@@ -5,17 +5,9 @@ using Telegram.Bot.Types.Enums;
 
 namespace backend.Commands
 {
-    public class DickCommand : ITelegramCommand
+    public class DickCommand(DickService service, MessageCacheService messageCache) : ITelegramCommand
     {
-        private readonly MessageCacheService _message;
-        private readonly DickService _service;
         public string Name => "/dick";
-
-        public DickCommand(DickService service, MessageCacheService message) 
-        {
-            _service = service;
-            _message = message;
-        }
 
         public async Task ExecuteAsync(ITelegramBotClient botClient, Update update)
         {
@@ -24,9 +16,9 @@ namespace backend.Commands
 
             var chatId = update.Message.Chat.Id;
             var userId = update.Message.From.Id;
-            var name = update.Message.From.FirstName ?? _message.GetMessage("DefaultPlayer");
+            var name = update.Message.From.FirstName ?? messageCache.GetMessage("DefaultPlayer");
 
-            var result = _service.PlayDailyGame(chatId, userId, name);
+            var result = await service.PlayDailyGameAsync(chatId, userId, name);
 
             await botClient.SendMessage(
                 chatId: chatId,

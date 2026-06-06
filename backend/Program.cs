@@ -13,7 +13,7 @@ var builder = WebApplication.CreateBuilder();
 builder.Logging.ClearProviders();
 builder.Host.UseNLog();
 
-var botToken = builder.Configuration["BotToken"];
+var botToken = builder.Configuration["BotToken"] ?? throw new InvalidOperationException("Bot token is missing in configuration!");
 
 builder.Services.AddDbContext<BotDbContext>(optins =>
     optins.UseSqlite("Data Source=bot.db"));
@@ -50,14 +50,9 @@ using (var scope = app.Services.CreateScope())
     db.Database.EnsureCreated();
 
     var textCache = scope.ServiceProvider.GetRequiredService<backend.Services.MessageCacheService>();
-    textCache.LoadCache();
+    await textCache.LoadCache();
 }
 
-/*var botClient = app.Services.GetRequiredService<ITelegramBotClient>();
-string webhookUrl = builder.Configuration["WebhookUrl"]
-    ?? throw new ArgumentNullException("Can't find WebhookUrl in config");
-await botClient.SetWebhook(webhookUrl);
-*/
 // Pipeline
 app.UseMiddleware<backend.Middlewares.ExceptionHandlingMiddleware>();
 

@@ -3,10 +3,8 @@ using Microsoft.EntityFrameworkCore;
 
 namespace backend.Data
 {
-    public class BotDbContext : DbContext
+    public class BotDbContext(DbContextOptions<BotDbContext> options) : DbContext(options)
     {
-        public BotDbContext(DbContextOptions<BotDbContext> options) : base(options) { }
-
         public DbSet<PlayerStat> PlayerStats { get; set; }
         public DbSet<BotMessage> BotMessages { get; set; }
     }

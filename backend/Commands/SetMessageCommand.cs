@@ -7,43 +7,44 @@ using Telegram.Bot.Types.Enums;
 
 namespace backend.Commands
 {
-    public class SetMessageCommand : ITelegramCommand
+    public class SetMessageCommand(IOptions<AdminSettings> adminSettings, MessageCacheService messageCache) : ITelegramCommand
     {
-        private readonly AdminSettings _adminSettings;
-        private readonly MessageCacheService _message;
+        private readonly AdminSettings _adminSettings = adminSettings.Value;
+
         public string Name => "/setmessage";
 
-        public SetMessageCommand(IOptions<AdminSettings> adminSettings, MessageCacheService message)
-        {
-            _adminSettings = adminSettings.Value;
-            _message = message;
-        }
         public async Task ExecuteAsync(ITelegramBotClient botClient, Update update)
         {
+            if (update.Message?.From == null)
+                return;
+
             long userId = update.Message.From.Id;
             long chatId = update.Message.Chat.Id;
 
             if (userId != _adminSettings.MasterAdminId)
                 return;
 
-            var message = update.Message.Text;
+            if (update.Message?.From == null || string.IsNullOrWhiteSpace(update.Message.Text))
+                return;
 
-            var parts = message.Split(' ', 3);
+            var messageText = update.Message.Text;
+
+            var parts = messageText.Split(' ', 3);
             if(parts.Length < 3)
             {
                 await botClient.SendMessage(
                     chatId: chatId,
-                    text: _message.GetMessage("FormatToChangeMessage"));
+                    text: messageCache.GetMessage("FormatToChangeMessage"));
                 return;
             }
 
             string key = parts[1];
             string newValue = parts[2];
 
-            await _message.UpdateTextAsync(key, newValue);
+            await messageCache.UpdateTextAsync(key, newValue);
             await botClient.SendMessage(
                     chatId: chatId,
-                    text: string.Format(_message.GetMessage("SuccessMessageChange"), key), 
+                    text: string.Format(messageCache.GetMessage("SuccessMessageChange"), key), 
                     parseMode: ParseMode.Html);
         }
     }
