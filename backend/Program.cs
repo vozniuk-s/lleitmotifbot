@@ -34,6 +34,7 @@ builder.Services.AddTransient<ITelegramCommand, SetMessageCommand>();
 builder.Services.AddTransient<ITelegramCommand, DeleteRecordCommand>();
 builder.Services.AddTransient<ITelegramCommand, ResetAttemptCommand>();
 builder.Services.AddTransient<ITelegramCommand, RipCommand>();
+builder.Services.AddTransient<ITelegramCommand, RipCountCommand>();
 builder.Services.AddTransient<CommandExecutor>();
 
 builder.Services.Configure<backend.Models.AdminSettings>(builder.Configuration.GetSection("AdminSettings"));
