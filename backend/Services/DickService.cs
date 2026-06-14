@@ -110,6 +110,23 @@ namespace backend.Services
 
             user.LastPlayedUtc = utcNow;
 
+            bool showRankMessage = false;
+            string rankMessage = string.Empty;
+
+            if(user.Score > user.HighScore)
+            {
+                string oldRank = RankProvider.GetRank(user.HighScore);
+                string newRank = RankProvider.GetRank(user.Score);
+
+                if(oldRank != newRank)
+                {
+                    showRankMessage = true;
+                    rankMessage = RankProvider.GetRankMessage(user.Score);
+                }
+
+                user.HighScore = user.Score;
+            }
+
             await db.SaveChangesAsync();
 
             int actualChange = user.Score - oldScore;
@@ -117,6 +134,9 @@ namespace backend.Services
             string resultMessage = actualChange > 0
                 ? string.Format(messageCache.GetMessage("PlusToScore").Replace("\\n", "\n"), actualChange, user.Score, user.TelegramId, parseName)
                 : string.Format(messageCache.GetMessage("MinusToScore").Replace("\\n", "\n"), (-1) * actualChange, user.Score, user.TelegramId, parseName);
+
+            if (showRankMessage)
+                resultMessage += $"\n{rankMessage}";
 
             return (true, resultMessage);
         }
