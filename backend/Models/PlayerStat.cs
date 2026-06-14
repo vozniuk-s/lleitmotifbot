@@ -7,6 +7,7 @@
         public long ChatId { get; set; }
         public string Name { get; set; } = string.Empty;
         public int Score { get; set; } = 0;
+        public int HighScore { get; set; } = 0;
         public DateTime LastPlayedUtc { get; set; } = DateTime.MinValue;
     }
 }
