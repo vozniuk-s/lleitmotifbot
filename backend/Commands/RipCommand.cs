@@ -4,10 +4,11 @@ using Telegram.Bot;
 using Telegram.Bot.Types;
 using Telegram.Bot.Types.Enums;
 using Microsoft.Extensions.Caching.Memory;
+using backend.Data;
 
 namespace backend.Commands
 {
-    public class RipCommand(MessageCacheService messageCache, IMemoryCache cache) : ITelegramCommand
+    public class RipCommand(MessageCacheService messageCache, IMemoryCache cache, BotDbContext db) : ITelegramCommand
     {
         public string Name => "/rip";
 
@@ -18,6 +19,12 @@ namespace backend.Commands
 
             var chatId = update.Message.Chat.Id;
             var userId = update.Message.From.Id;
+
+            var user = db.PlayerStats.
+                FirstOrDefault(u => u.TelegramId == userId && u.ChatId == chatId);
+            if (user == null)
+                return;
+
             string cacheKey = $"rip_cooldown_{userId}";
 
             if (cache.TryGetValue(cacheKey, out _))
@@ -30,13 +37,16 @@ namespace backend.Commands
 
             var name = update.Message.From.FirstName ?? messageCache.GetMessage("DefaultPlayer");
             string parseName = WebUtility.HtmlEncode(name);
-            int randomIndex = Random.Shared.Next(1, 4);
+            int randomIndex = Random.Shared.Next(1, 7);
             string template = messageCache.GetMessage($"RIPBot{randomIndex}");
 
             if (string.IsNullOrEmpty(template))
             {
                 template = messageCache.GetMessage("RIPBot1");
             }
+
+            user.RipCount += 1;
+            await db.SaveChangesAsync();
 
             await botClient.SendMessage(
                 chatId: chatId,

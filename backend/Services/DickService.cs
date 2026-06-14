@@ -254,6 +254,18 @@ namespace backend.Services
 
             return string.Format(messageCache.GetMessage("ResetSuccess"), user.Name);
         }
+        public async Task<string> GetRipCountAsync(long userId, long chatId)
+        {
+            var user = await db.PlayerStats.
+                FirstOrDefaultAsync(u => u.TelegramId == userId && u.ChatId == chatId);
+            if (user == null)
+                return messageCache.GetMessage("DidntFind");
+
+            string playerName = WebUtility.HtmlEncode(user.Name);
+            int count = user.RipCount;
+
+            return string.Format(messageCache.GetMessage("RipCount"), userId, playerName, count, GetWordForm(count));
+        }
 
         private int WeightedRandomAsync(int[] values, int[] weights)
         {
@@ -271,6 +283,16 @@ namespace backend.Services
             }
 
             return values[^1];
+        }
+        private string GetWordForm(int count)
+        {
+            int n = Math.Abs(count) % 100;
+            int n1 = n % 10;
+
+            if (n > 10 && n < 20) return "разів";
+            if (n1 > 1 && n1 < 5) return "рази";
+            if (n1 == 1) return "раз";
+            return "разів";
         }
     }
 }
